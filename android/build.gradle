@@ -22,7 +22,7 @@ rootProject.allprojects {
 apply plugin: 'com.android.library'
 
 android {
-    namespace "com.example.bearidos"  // Add this line
+    namespace "com.example.flutterbarcodescanner"  // Add this line
     compileSdkVersion 34
 
     defaultConfig {
