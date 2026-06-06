@@ -24,12 +24,30 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
     public static var scanMode = ScanMode.QR.index
     
     public static func register(with registrar: FlutterPluginRegistrar) {
-        viewController = (UIApplication.shared.delegate?.window??.rootViewController)!
+        if let rootViewController = resolveRootViewController() {
+            viewController = rootViewController
+        }
         let channel = FlutterMethodChannel(name: "flutter_barcode_scanner", binaryMessenger: registrar.messenger())
         let instance = SwiftFlutterBarcodeScannerPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
         let eventChannel=FlutterEventChannel(name: "flutter_barcode_scanner_receiver", binaryMessenger: registrar.messenger())
         eventChannel.setStreamHandler(instance)
+    }
+
+    private static func resolveRootViewController() -> UIViewController? {
+        if #available(iOS 13.0, *) {
+            let foregroundScenes = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .filter { $0.activationState == .foregroundActive }
+
+            for scene in foregroundScenes {
+                if let rootViewController = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    return rootViewController
+                }
+            }
+        }
+
+        return UIApplication.shared.delegate?.window??.rootViewController
     }
     
     /// Check for camera availability
@@ -88,6 +106,12 @@ public class SwiftFlutterBarcodeScannerPlugin: NSObject, FlutterPlugin, ScanBarc
             SwiftFlutterBarcodeScannerPlugin.scanMode = ScanMode.QR.index
         }
         
+        guard let rootViewController = SwiftFlutterBarcodeScannerPlugin.resolveRootViewController() else {
+            result(FlutterError(code: "NO_ROOT_VIEW_CONTROLLER", message: "Unable to find root view controller", details: nil))
+            return
+        }
+
+        SwiftFlutterBarcodeScannerPlugin.viewController = rootViewController
         pendingResult=result
         let controller = BarcodeScannerViewController()
         controller.delegate = self
