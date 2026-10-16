@@ -16,6 +16,7 @@
 package com.amolg.flutterbarcodescanner;
 
 import android.Manifest;
+import android.graphics.Color;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -42,6 +43,7 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.ImageView;
 import android.widget.Toast;
 
@@ -80,6 +82,13 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
 
     // helper objects for detecting taps and pinches.
     private ScaleGestureDetector scaleGestureDetector;
+
+    // Zoom while pinching, so it follows the fingers
+    private float pinchZoom = 1f;
+
+    // One tap instead of a pinch, like the phone's own camera
+    private static final float[] ZOOM_STEPS = {1f, 2f, 4f};
+    private final TextView[] zoomButtons = new TextView[ZOOM_STEPS.length];
     private GestureDetector gestureDetector;
 
     private ImageView imgViewBarcodeCaptureUseFlash;
@@ -127,6 +136,15 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
 
         imgViewSwitchCamera = findViewById(R.id.imgViewSwitchCamera);
         imgViewSwitchCamera.setOnClickListener(this);
+
+        zoomButtons[0] = findViewById(R.id.btnZoom1);
+        zoomButtons[1] = findViewById(R.id.btnZoom2);
+        zoomButtons[2] = findViewById(R.id.btnZoom4);
+        for (int i = 0; i < ZOOM_STEPS.length; i++) {
+            final float step = ZOOM_STEPS[i];
+            zoomButtons[i].setOnClickListener(view -> applyZoom(step));
+        }
+        showZoom(1f);
 
         mPreview = findViewById(R.id.preview);
         mGraphicOverlay = findViewById(R.id.graphicOverlay);
@@ -423,6 +441,8 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
             boolean useFlash = flashStatus == USE_FLASH.ON.ordinal();
             createCameraSource(autoFocus, useFlash, getInverseCameraFacing(currentFacing));
             startCameraSource();
+            // The other camera starts without zoom
+            showZoom(1f);
         }
     }
 
@@ -483,7 +503,14 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
          */
         @Override
         public boolean onScale(ScaleGestureDetector detector) {
-            return false;
+            if (mCameraSource == null) {
+                return false;
+            }
+            float max = mCameraSource.getMaxZoomRatio();
+            pinchZoom = Math.max(1f, Math.min(max, pinchZoom * detector.getScaleFactor()));
+            showZoom(mCameraSource.setZoomRatio(pinchZoom));
+            // Consumed: the next scale factor is relative to this one
+            return true;
         }
 
         /**
@@ -500,6 +527,9 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
          */
         @Override
         public boolean onScaleBegin(ScaleGestureDetector detector) {
+            if (mCameraSource != null) {
+                pinchZoom = mCameraSource.getZoomRatio();
+            }
             return true;
         }
 
@@ -516,7 +546,33 @@ public final class BarcodeCaptureActivity extends AppCompatActivity implements B
          */
         @Override
         public void onScaleEnd(ScaleGestureDetector detector) {
-            mCameraSource.doZoom(detector.getScaleFactor());
+            // Already zoomed while pinching
+        }
+    }
+
+    private void applyZoom(float ratio) {
+        if (mCameraSource == null) {
+            return;
+        }
+        // A phone that does not reach 4x zooms as far as it can
+        showZoom(mCameraSource.setZoomRatio(Math.min(ratio, mCameraSource.getMaxZoomRatio())));
+    }
+
+    /**
+     * Marks the zoom button closest to the current zoom.
+     */
+    private void showZoom(float ratio) {
+        int selected = 0;
+        for (int i = 1; i < ZOOM_STEPS.length; i++) {
+            if (Math.abs(ZOOM_STEPS[i] - ratio) < Math.abs(ZOOM_STEPS[selected] - ratio)) {
+                selected = i;
+            }
+        }
+        for (int i = 0; i < ZOOM_STEPS.length; i++) {
+            boolean isSelected = i == selected;
+            zoomButtons[i].setBackgroundResource(isSelected
+                    ? R.drawable.zoom_button_selected : R.drawable.zoom_button);
+            zoomButtons[i].setTextColor(isSelected ? Color.BLACK : Color.WHITE);
         }
     }
 

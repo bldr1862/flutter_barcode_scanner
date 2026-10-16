@@ -396,6 +396,70 @@ public class CameraSource {
         return mFacing;
     }
 
+    /**
+     * Current zoom as a ratio (1.0 = no zoom).
+     */
+    public float getZoomRatio() {
+        synchronized (mCameraLock) {
+            if (mCamera == null) {
+                return 1f;
+            }
+            Camera.Parameters parameters = mCamera.getParameters();
+            if (!parameters.isZoomSupported()) {
+                return 1f;
+            }
+            return parameters.getZoomRatios().get(parameters.getZoom()) / 100f;
+        }
+    }
+
+    /**
+     * Highest zoom the camera offers as a ratio (1.0 = no zoom).
+     */
+    public float getMaxZoomRatio() {
+        synchronized (mCameraLock) {
+            if (mCamera == null) {
+                return 1f;
+            }
+            Camera.Parameters parameters = mCamera.getParameters();
+            if (!parameters.isZoomSupported()) {
+                return 1f;
+            }
+            List<Integer> ratios = parameters.getZoomRatios();
+            return ratios.get(ratios.size() - 1) / 100f;
+        }
+    }
+
+    /**
+     * Zooms to the step closest to the ratio (1.0 = no zoom), within what the
+     * camera offers, and returns the ratio applied.
+     */
+    public float setZoomRatio(float ratio) {
+        synchronized (mCameraLock) {
+            if (mCamera == null) {
+                return 1f;
+            }
+            Camera.Parameters parameters = mCamera.getParameters();
+            if (!parameters.isZoomSupported()) {
+                return 1f;
+            }
+            List<Integer> ratios = parameters.getZoomRatios();
+            int wanted = Math.round(ratio * 100);
+            int closest = 0;
+            for (int i = 1; i < ratios.size(); i++) {
+                if (Math.abs(ratios.get(i) - wanted) < Math.abs(ratios.get(closest) - wanted)) {
+                    closest = i;
+                }
+            }
+            // Setting the parameters restarts nothing, but is not free: skip
+            // it while a pinch stays within the same step
+            if (closest != parameters.getZoom()) {
+                parameters.setZoom(closest);
+                mCamera.setParameters(parameters);
+            }
+            return ratios.get(closest) / 100f;
+        }
+    }
+
     public int doZoom(float scale) {
         synchronized (mCameraLock) {
             if (mCamera == null) {
